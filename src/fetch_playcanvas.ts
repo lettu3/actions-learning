@@ -31,7 +31,7 @@ const headers = {
     'Content-Type': 'application/json'
 };
 
-async function fetchPlayCanvas(){
+export async function fetchPlayCanvas(){
     try{
         console.log(`🔎 Buscando escenas para el proyecto ${config.playcanvas.project_id}...`);
 
