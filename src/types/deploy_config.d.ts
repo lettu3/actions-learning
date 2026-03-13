@@ -7,6 +7,7 @@ declare module "deploy_config"{
         }
         html_modify: {
             cdn_url: string;
+            cloudfront_distribution_id: string;
             modify_indexhtml: boolean;
             title: string;
         }
