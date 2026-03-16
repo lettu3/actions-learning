@@ -138,7 +138,12 @@ export async function fetchPlayCanvas(){
         const zipRes = await fetch(downloadUrl);
         if (!zipRes.ok) throw new Error(`Error HTTP descarga: ${zipRes.status}`);
         
-        const zipPath = path.resolve(__dirname, 'build.zip');
+        const tempDir = path.resolve(__dirname, '../temp');
+        if (!fs.existsSync(tempDir)) {
+            fs.mkdirSync(tempDir, { recursive: true });
+        }
+        
+        const zipPath = path.join(tempDir, 'build.zip');
         const fileStream = fs.createWriteStream(zipPath);
         
         if (zipRes.body) {
