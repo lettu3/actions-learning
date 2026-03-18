@@ -32,15 +32,15 @@ async function modifyHTML(indexPath: string, config: any): Promise<void> {
 }
 
 async function injectSceneDataToHTML(distPath: string, indexPath: string): Promise<void> {
-    const settingsPath = path.join(distPath, 'js', '__settings__.mjs');
-    
-    if (!fs.existsSync(settingsPath)) {
-        console.log(`⚠️ No se encontró __settings__.mjs para extraer SCENE_PATH.`);
+    const indexMjsPath = path.join(distPath, 'js', 'index.mjs');  
+
+    if (!fs.existsSync(indexMjsPath)) {
+        console.log(`⚠️ No se encontró index.mjs para extraer SCENE_PATH.`);
         return;
     }
 
     try {
-        const settingsContent = await fsPromises.readFile(settingsPath, 'utf-8');
+        const settingsContent = await fsPromises.readFile(indexMjsPath, 'utf-8');
         const scenePathMatch = settingsContent.match(/const SCENE_PATH\s*=\s*"([^"]+)";/);
         
         if (!scenePathMatch || !scenePathMatch[1]) return;
@@ -82,9 +82,9 @@ async function injectSceneDataToHTML(distPath: string, indexPath: string): Promi
 
 
 async function modifyJS(distPath: string, config: any): Promise<void> {
-    const jsPath = path.join(distPath, 'js', '__settings__.mjs');
+    const jsPath = path.join(distPath, 'js', 'index.mjs');
     if (!fs.existsSync(jsPath)) {
-        console.log(`⚠️ No se encontró el archivo js/__settings__.mjs. Omitiendo modificación de JS.`);
+        console.log(`⚠️ No se encontró el archivo index.mjs. Omitiendo modificación de JS.`);
         return;
     }
 
@@ -113,12 +113,46 @@ async function modifyJS(distPath: string, config: any): Promise<void> {
         content = content.replace(/const CONFIG_FILENAME\s*=\s*"[^"]*";/, `const CONFIG_FILENAME = "${prefix}config.json";`);
 
         await fsPromises.writeFile(jsPath, content, 'utf-8');
-        console.log(`✅ JS Modificado: Se actualizaron ASSET, SCRIPT y CONFIG en js/__settings__.mjs`);
+        console.log(`✅ JS Modificado: Se actualizaron ASSET, SCRIPT y CONFIG en index.mjs`);
     } catch (error) {
         console.error(`❌ Error al modificar ${jsPath}:`, error);
         throw error;
     }
 }
+
+/**
+ * Since PlayCanvas is PURE BULLSHIT, and it exports config.json with /api/ URLs, 
+ * we need to fix it ourselves.
+ */
+async function modifyConfigJSON(distPath: string): Promise<void> {
+    const configJsonPath = path.join(distPath, 'config.json');
+    if (!fs.existsSync(configJsonPath)) return;
+
+    try {
+        const configData = JSON.parse(await fsPromises.readFile(configJsonPath, 'utf-8'));
+
+        let modified = false;
+        if (configData.assets) {
+            for (const key in configData.assets) {
+                const asset = configData.assets[key];
+                // Si la URL arranca con /api/, la pisamos por la ruta real de los assets
+                if (asset.file && asset.file.url && asset.file.url.startsWith('/api/')) {
+                    asset.file.url = `files/assets/${key}/1/${asset.file.filename}`;
+                    modified = true;
+                }
+            }
+        }
+
+        if (modified) {
+            // Guardamos el JSON pisado sin espacios extra para ahorrar peso
+            await fsPromises.writeFile(configJsonPath, JSON.stringify(configData), 'utf-8');
+            console.log(`✅ config.json Modificado: Se corrigieron las rutas huérfanas '/api/'.`);
+        }
+    } catch (error) {
+        console.error(`❌ Error al modificar config.json:`, error);
+    }
+}
+
 
 export async function modifyBuild() {
     try {
@@ -159,6 +193,7 @@ export async function modifyBuild() {
         }
 
         tasks.push(modifyJS(distPath, config));
+        tasks.push(modifyConfigJSON(distPath));
 
         if (tasks.length > 0) {
             console.log('💫 Aplicando modificaciones en paralelo...');
@@ -178,4 +213,6 @@ export async function modifyBuild() {
     }
 }
 
-modifyBuild();
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+    modifyBuild();
+}
